@@ -10,10 +10,11 @@ const fs = require('fs');
 const path = require('path');
 const ini = require('ini');
 const readlineSync = require('readline-sync');
+
 /**
  * 读取配置文件
  */
-function getConfig() {
+function getConfig () {
     let configPath = path.join(process.cwd(), 'config.ini');
     if (!fs.existsSync(configPath)) {
         console.error('找不到配置文件，请在程序目录下放置config.ini配置文件'.red);
@@ -21,9 +22,9 @@ function getConfig() {
         process.exit();
     }
     let config = fs
-        .readFileSync(configPath)
-        .toString()
-        .replace(/\\+/g, '\\\\');
+    .readFileSync(configPath)
+    .toString()
+    .replace(/\\+/g, '\\\\');
     config = ini.parse(config);
     config.leftTop = config.leftTop.split(',');
     config.rightBottom = config.rightBottom.split(',');

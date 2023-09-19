@@ -12,7 +12,7 @@ const moment = require('moment');
 const fs = require('fs');
 const http = require('http');
 
-const TileLnglatTransform = require('tile-lnglat-transform'); //用于经纬度转换为瓦片坐标
+const TileLnglatTransform = require('tile-lnglat-transform'); // 用于经纬度转换为瓦片坐标
 const TileLnglatTransformBaidu = TileLnglatTransform.TileLnglatTransformBaidu;
 
 const events = require('events');
@@ -20,44 +20,45 @@ const eventEmitter = new events.EventEmitter();
 
 const getConfig = require('./getConfig');
 
-let totalCount = 0; //瓦片总数
-let downCount = 0; //已下载总数
-let downSize = 0; //已下载大小
-let errorCount = 0; //出错总数
-let beginTime = null; //开始时间
-let timer = null; //计时器
-let config = getConfig(); //基本配置
-let errLogPath = './err.log'; //错误日志
-let errorTilesCount = {}; //失败次数记录
+let totalCount = 0; // 瓦片总数
+let downCount = 0; // 已下载总数
+let downSize = 0; // 已下载大小
+let errorCount = 0; // 出错总数
+let beginTime = null; // 开始时间
+let timer = null; // 计时器
+let config = getConfig(); // 基本配置
+let errLogPath = './err.log'; // 错误日志
+let errorTilesCount = {}; // 失败次数记录
 let httpOpiton = {
-    timeout: 30 * 1000,
-}; //请求配置
+    timeout: 30 * 1000
+}; // 请求配置
 
-let tileZ = config.minLevel; //瓦片级别,瓦片Z
-let p1 = TileLnglatTransformBaidu.lnglatToTile(config.x1, config.y1, tileZ); //左上角
-let p2 = TileLnglatTransformBaidu.lnglatToTile(config.x2, config.y2, tileZ); //右下角
-let tileX = p1.tileX; //瓦片X
-let tileY = p2.tileY - 1; //瓦片Y
-let taskList = new Set(); //任务队列
-let taskCount = 0; //已添加任务数量
+let tileZ = config.minLevel; // 瓦片级别,瓦片Z
+let p1 = TileLnglatTransformBaidu.lnglatToTile(config.x1, config.y1, tileZ); // 左上角
+let p2 = TileLnglatTransformBaidu.lnglatToTile(config.x2, config.y2, tileZ); // 右下角
+let tileX = p1.tileX; // 瓦片X
+let tileY = p2.tileY - 1; // 瓦片Y
+let taskList = new Set(); // 任务队列
+let taskCount = 0; // 已添加任务数量
 
 /**
  * 计算时间
  */
-function calcTime(milliseconds) {
+function calcTime (milliseconds) {
     let hours = parseInt(milliseconds / 1000 / 60 / 60)
-        .toString()
-        .padStart(2, '0');
+    .toString()
+    .padStart(2, '0');
     let minutes = (parseInt(milliseconds / 1000 / 60) % 60).toString().padStart(2, '0');
     let seconds = Math.ceil(parseFloat(milliseconds / 1000) % 60)
-        .toString()
-        .padStart(2, '0');
+    .toString()
+    .padStart(2, '0');
     return `${hours}:${minutes}:${seconds}`;
 }
+
 /**
  * 计算下载网速
  */
-function calcNetSpeed(size) {
+function calcNetSpeed (size) {
     let speed = '';
     if (size < 1024) {
         speed = size + ' B';
@@ -74,10 +75,11 @@ function calcNetSpeed(size) {
 /**
  * 启动下载进程
  */
-function download(tile) {
+function download (tile) {
     let isError = false;
     let [x, y, z] = tile;
-    let src = `http://api0.map.bdimg.com/customimage/tile?&qt=tile&x=${x}&y=${y}&z=${z}&customid=${config.customid || ''}&styles=${config.style ? encodeURIComponent(config.style) : ''}`;
+    let src = `http://api0.map.bdimg.com/customimage/tile?&qt=tile&x=${x}&y=${y}&z=${z}&ak=5ieMMexWmzB9jivTq6oCRX9j&customid=${config.customid || ''}`;
+
     let errorHandler = () => {
         if (!isError) {
             isError = true;
@@ -85,44 +87,44 @@ function download(tile) {
         }
     };
     let req = http
-        .get(src, httpOpiton, (res) => {
-            let buffer = null;
-            let contentLength = Number(res.headers['content-length']);
-            if (res.statusCode !== 200 || isNaN(contentLength)) {
-                errorHandler();
-                return;
-            }
-            res.on('data', (chunk) => {
-                if (!buffer) {
-                    buffer = Buffer.from(chunk);
-                } else {
-                    buffer = Buffer.concat([buffer, chunk]);
-                }
-            })
-                .on('end', () => {
-                    if (!isError) {
-                        if (buffer && buffer.length === contentLength && res.complete) {
-                            successCallback(tile, buffer);
-                        } else {
-                            errorHandler();
-                        }
-                    }
-                })
-                .on('aborted', (err) => {
-                    errorHandler();
-                });
-        })
-        .on('error', (e) => {
+    .get(src, httpOpiton, (res) => {
+        let buffer = null;
+        if (res.statusCode !== 200) {
             errorHandler();
+            return;
+        }
+        res.on('data', (chunk) => {
+            if (!buffer) {
+                buffer = Buffer.from(chunk);
+            } else {
+                buffer = Buffer.concat([buffer, chunk]);
+            }
         })
-        .on('timeout', () => {
-            req.abort();
+        .on('end', () => {
+            if (!isError) {
+                if (buffer && buffer.length) {
+                    successCallback(tile, buffer);
+                } else {
+                    errorHandler();
+                }
+            }
+        })
+        .on('aborted', (err) => {
+            errorHandler();
         });
+    })
+    .on('error', (e) => {
+        errorHandler();
+    })
+    .on('timeout', () => {
+        req.abort();
+    });
 }
+
 /**
  * 下载成功回调
  */
-function successCallback(tile, buffer, bb) {
+function successCallback (tile, buffer, bb) {
     let dir = path.join(config.path, tile[2].toString(), tile[0].toString());
     let fileName = `${tile[1]}.${config.ext || 'png'}`;
     if (!fs.existsSync(dir)) {
@@ -137,30 +139,32 @@ function successCallback(tile, buffer, bb) {
         eventEmitter.emit('singleTileComplete', tile);
     });
 }
+
 /**
  * 下载失败回调
  */
-function errorCallback(tile, src, k, bb) {
+function errorCallback (tile, src, k, bb) {
     let key = `x${tile[0]}y${tile[1]}z${tile[2]}`;
     if (errorTilesCount[key] === undefined) {
         errorTilesCount[key] = 0;
     }
     errorTilesCount[key]++;
-    //失败重试1000万次
+    // 失败重试1000万次
     if (errorTilesCount[key] > 10000000) {
         delete errorTilesCount[key];
         errorCount++;
         console.error((key + '下载失败').red);
-        fs.writeFileSync(errLogPath, src + '\r\n', { flag: 'a' }, function (err) {});
+        fs.writeFileSync(errLogPath, src + '\r\n', { flag: 'a' }, function(err) {});
         eventEmitter.emit('singleTileComplete', tile);
     } else {
         download(tile);
     }
 }
+
 /**
  * 下载回调方法
  */
-function downloadComplete() {
+function downloadComplete () {
     if (totalCount - errorCount - downCount <= 0) {
         let endTime = new Date();
         clearInterval(timer);
@@ -173,10 +177,11 @@ function downloadComplete() {
         }
     }
 }
+
 /**
  * 显示进度信息
  */
-function showProgressInfo() {
+function showProgressInfo () {
     let splitTime = 1;
     let preCount = 0;
     let preSize = 0;
@@ -197,7 +202,7 @@ function showProgressInfo() {
 /**
  * 下载瓦片
  */
-function downloadTiles() {
+function downloadTiles () {
     if (fs.existsSync(errLogPath)) {
         fs.unlinkSync(errLogPath);
     }
@@ -224,7 +229,7 @@ function downloadTiles() {
 /**
  * 添加任务
  */
-function addTask() {
+function addTask () {
     tileY++;
     if (tileY > p1.tileY) {
         tileY = p2.tileY;
@@ -247,10 +252,11 @@ function addTask() {
         taskCount++;
     }
 }
+
 /**
  * 计算瓦片数量
  */
-function calcTileCount() {
+function calcTileCount () {
     let count = 0;
     for (i = config.minLevel; i <= config.maxLevel; i++) {
         let p1 = TileLnglatTransformBaidu.lnglatToTile(config.x1, config.y1, i);
@@ -259,4 +265,5 @@ function calcTileCount() {
     }
     return count;
 }
+
 module.exports = downloadTiles;
